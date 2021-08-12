@@ -1,12 +1,20 @@
 import axios from 'axios'
-import { ASTNode } from '@solidity-parser/parser/dist/ast-types'
+import { ASTNode } from '@solidity-parser/parser/dist/src/ast-types'
 import { parse } from '@solidity-parser/parser'
 import { VError } from 'verror'
 
 import { convertNodeToUmlClass } from './parser'
 import { UmlClass } from './umlClass'
 
-const networks = <const>['mainnet', 'ropsten', 'kovan', 'rinkeby', 'goerli']
+const networks = <const>[
+    'mainnet',
+    'ropsten',
+    'kovan',
+    'rinkeby',
+    'goerli',
+    'polygon',
+    'bsc',
+]
 type Network = typeof networks[number]
 
 export class EtherscanParser {
@@ -22,6 +30,12 @@ export class EtherscanParser {
             )
         } else if (network === 'mainnet') {
             this.url = 'https://api.etherscan.io/api'
+        } else if (network === 'polygon') {
+            this.url = 'https://api.polygonscan.com/api'
+            this.apikey = 'AMHGNTV5A7XYGX2M781JB3RC1DZFVRWQEB'
+        } else if (network === 'bsc') {
+            this.url = 'https://api.bscscan.com/api'
+            this.apikey = 'APYH49FXVY9UA3KTDI6F4WP3KPIC86NITN'
         } else {
             this.url = `https://api-${network}.etherscan.io/api`
         }
@@ -44,6 +58,22 @@ export class EtherscanParser {
         }
 
         return umlClasses
+    }
+
+    /**
+     * Get Solidity code from Etherscan for a contract and merges all files
+     * into one long string of Solidity code.
+     * @param contractAddress Ethereum contract address with a 0x prefix
+     * @return Promise string of Solidity code
+     */
+    async getSolidityCode(contractAddress: string): Promise<string> {
+        const sourceFiles = await this.getSourceCode(contractAddress)
+
+        let solidityCode = ''
+        sourceFiles.forEach((sourceFile) => {
+            solidityCode += sourceFile.code
+        })
+        return solidityCode
     }
 
     /**

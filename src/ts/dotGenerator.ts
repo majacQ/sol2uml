@@ -16,31 +16,36 @@ export interface ClassOptions {
     hideEnums?: boolean
     hideLibraries?: boolean
     hideInterfaces?: boolean
+    hideInternals?: boolean
 }
 
 export const dotUmlClass = (
     umlClass: UmlClass,
     options: ClassOptions = {}
 ): string => {
-    // do not include library or interface classes if hidden
+    // do not include library, interface, struct or enum classes if hidden
     if (
         (options.hideLibraries &&
             umlClass.stereotype === ClassStereotype.Library) ||
         (options.hideInterfaces &&
-            umlClass.stereotype === ClassStereotype.Interface)
+            umlClass.stereotype === ClassStereotype.Interface) ||
+        (options.hideStructs &&
+            umlClass.stereotype === ClassStereotype.Struct) ||
+        (options.hideEnums && umlClass.stereotype === ClassStereotype.Enum)
     ) {
         return ''
     }
+
     let dotString = `\n${umlClass.id} [label="{${dotClassTitle(umlClass)}`
 
     // Add attributes
     if (!options.hideAttributes) {
-        dotString += dotAttributeVisibilities(umlClass)
+        dotString += dotAttributeVisibilities(umlClass, options)
     }
 
     // Add operators
     if (!options.hideOperators) {
-        dotString += dotOperatorVisibilities(umlClass)
+        dotString += dotOperatorVisibilities(umlClass, options)
     }
 
     dotString += '}"]'
@@ -68,6 +73,12 @@ const dotClassTitle = (umlClass: UmlClass): string => {
         case ClassStereotype.Library:
             stereoName = 'Library'
             break
+        case ClassStereotype.Struct:
+            stereoName = 'Struct'
+            break
+        case ClassStereotype.Enum:
+            stereoName = 'Enum'
+            break
         default:
             // Contract or undefined stereotype will just return the UmlClass name
             return umlClass.name
@@ -76,8 +87,18 @@ const dotClassTitle = (umlClass: UmlClass): string => {
     return `\\<\\<${stereoName}\\>\\>\\n${umlClass.name}`
 }
 
-const dotAttributeVisibilities = (umlClass: UmlClass): string => {
+const dotAttributeVisibilities = (
+    umlClass: UmlClass,
+    options: { hideInternals?: boolean } = {}
+): string => {
     let dotString = '| '
+    // if a struct or enum then no visibility group
+    if (
+        umlClass.stereotype === ClassStereotype.Struct ||
+        umlClass.stereotype === ClassStereotype.Enum
+    ) {
+        return dotString + dotAttributes(umlClass.attributes, undefined, false)
+    }
 
     // For each visibility group
     for (const vizGroup of ['Private', 'Internal', 'External', 'Public']) {
@@ -86,11 +107,13 @@ const dotAttributeVisibilities = (umlClass: UmlClass): string => {
         // For each attribute of te UML Class
         for (const attribute of umlClass.attributes) {
             if (
+                !options.hideInternals &&
                 vizGroup === 'Private' &&
                 attribute.visibility === Visibility.Private
             ) {
                 attributes.push(attribute)
             } else if (
+                !options.hideInternals &&
                 vizGroup === 'Internal' &&
                 attribute.visibility === Visibility.Internal
             ) {
@@ -112,28 +135,36 @@ const dotAttributeVisibilities = (umlClass: UmlClass): string => {
             }
         }
 
-        dotString += dotAttributes(vizGroup, attributes)
+        dotString += dotAttributes(attributes, vizGroup)
     }
 
     return dotString
 }
 
-const dotAttributes = (vizGroup: string, attributes: Attribute[]): string => {
+const dotAttributes = (
+    attributes: Attribute[],
+    vizGroup?: string,
+    indent = true
+): string => {
     if (!attributes || attributes.length === 0) {
         return ''
     }
+    const indentString = indent ? '\\ \\ \\ ' : ''
 
-    let dotString = vizGroup + ':\\l'
+    let dotString = vizGroup ? vizGroup + ':\\l' : ''
 
     // for each attribute
     attributes.forEach((attribute) => {
-        dotString += `\\ \\ \\ ${attribute.name}: ${attribute.type}\\l`
+        dotString += `${indentString}${attribute.name}: ${attribute.type}\\l`
     })
 
     return dotString
 }
 
-const dotOperatorVisibilities = (umlClass: UmlClass): string => {
+const dotOperatorVisibilities = (
+    umlClass: UmlClass,
+    options: { hideInternals?: boolean } = {}
+): string => {
     let dotString = '| '
 
     // For each visibility group
@@ -143,11 +174,13 @@ const dotOperatorVisibilities = (umlClass: UmlClass): string => {
         // For each attribute of te UML Class
         for (const operator of umlClass.operators) {
             if (
+                !options.hideInternals &&
                 vizGroup === 'Private' &&
                 operator.visibility === Visibility.Private
             ) {
                 operators.push(operator)
             } else if (
+                !options.hideInternals &&
                 vizGroup === 'Internal' &&
                 operator.visibility === Visibility.Internal
             ) {
@@ -309,8 +342,9 @@ const dotEnums = (umlClass: UmlClass): string => {
         dotString += `\n"${enumId}" [label="{\\<\\<enum\\>\\>\\n${enumKey}|`
 
         // output each enum value
+        let enumIndex = 0
         for (const value of umlClass.enums[enumKey]) {
-            dotString += value + '\\l'
+            dotString += value + ': ' + enumIndex++ + '\\l'
         }
 
         dotString += '}"]'

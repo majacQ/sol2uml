@@ -8,7 +8,8 @@ import { UmlClass } from './umlClass'
 const debugControl = require('debug')
 const debug = require('debug')('sol2uml')
 
-const program = require('commander')
+import { Command } from 'commander'
+const program = new Command()
 
 program
     .usage(
@@ -30,14 +31,14 @@ If an Ethereum address with a 0x prefix is passed, the verified source code from
     )
     .option(
         '-f, --outputFormat <value>',
-        'output file format: svg, png, dot or all',
+        'output file format: svg, png, sol, dot or all',
         'svg'
     )
     .option('-o, --outputFileName <value>', 'output file name')
     .option(
         '-d, --depthLimit <depth>',
         'number of sub folders that will be recursively searched for Solidity files. Default -1 is unlimited',
-        -1
+        '-1'
     )
     .option(
         '-i, --ignoreFilesOrFolders <filesOrFolders>',
@@ -45,7 +46,7 @@ If an Ethereum address with a 0x prefix is passed, the verified source code from
     )
     .option(
         '-n, --network <network>',
-        'mainnet, ropsten, kovan, rinkeby or goerli',
+        'mainnet, polygon, bsc, ropsten, kovan, rinkeby or goerli',
         'mainnet'
     )
     .option('-a, --hideAttributes', 'hide class and interface attributes')
@@ -57,17 +58,23 @@ If an Ethereum address with a 0x prefix is passed, the verified source code from
     .option('-s, --hideStructs ', 'hide data structures')
     .option('-l, --hideLibraries ', 'hide libraries')
     .option('-t, --hideInterfaces ', 'hide interfaces')
+    .option(
+        '-r, --hideInternals',
+        'hide private and internal attributes and operators'
+    )
     .option('-k, --etherscanApiKey <key>', 'Etherscan API Key')
     .option('-c, --clusterFolders', 'cluster contracts into source folders')
     .option('-v, --verbose', 'run with debugging statements')
     .parse(process.argv)
 
-if (program.verbose) {
+const options = program.opts()
+
+if (options.verbose) {
     debugControl.enable('sol2uml')
 }
 
 // This function needs to be loaded after the DEBUG env variable has been set
-import { generateFilesFromUmlClasses } from './converter'
+import { generateFilesFromUmlClasses, writeSolidity } from './converter'
 
 async function sol2uml() {
     let fileFolderAddress: string
@@ -84,25 +91,35 @@ async function sol2uml() {
         )
 
         const etherscanApiKey =
-            program.etherscanApiKey || 'ZAD4UI2RCXCQTP38EXS3UY2MPHFU5H9KB1'
+            options.etherscanApiKey || 'ZAD4UI2RCXCQTP38EXS3UY2MPHFU5H9KB1'
         const etherscanParser = new EtherscanParser(
             etherscanApiKey,
-            program.network
+            options.network
         )
 
+        // If output is Solidity code
+        if (options.outputFormat === 'sol') {
+            const solidityCode = await etherscanParser.getSolidityCode(
+                fileFolderAddress
+            )
+
+            // Write Solidity to the contract address
+            writeSolidity(solidityCode, fileFolderAddress)
+            return
+        }
         umlClasses = await etherscanParser.getUmlClasses(fileFolderAddress)
     } else {
-        const depthLimit = parseInt(program.depthLimit)
+        const depthLimit = parseInt(options.depthLimit)
         if (isNaN(depthLimit)) {
             console.error(
-                `depthLimit option must be an integer. Not ${program.depthLimit}`
+                `depthLimit option must be an integer. Not ${options.depthLimit}`
             )
             process.exit(1)
         }
 
         const filesFolders: string[] = fileFolderAddress.split(',')
-        let ignoreFilesFolders = program.ignoreFilesOrFolders
-            ? program.ignoreFilesOrFolders.split(',')
+        let ignoreFilesFolders = options.ignoreFilesOrFolders
+            ? options.ignoreFilesOrFolders.split(',')
             : []
         umlClasses = await parseUmlClassesFromFiles(
             filesFolders,
@@ -112,8 +129,8 @@ async function sol2uml() {
     }
 
     let filteredUmlClasses = umlClasses
-    if (program.baseContractNames) {
-        const baseContractNames = program.baseContractNames.split(',')
+    if (options.baseContractNames) {
+        const baseContractNames = options.baseContractNames.split(',')
         filteredUmlClasses = classesConnectedToBaseContracts(
             umlClasses,
             baseContractNames
@@ -123,16 +140,17 @@ async function sol2uml() {
     generateFilesFromUmlClasses(
         filteredUmlClasses,
         fileFolderAddress,
-        program.outputFormat,
-        program.outputFileName,
-        program.clusterFolders,
+        options.outputFormat,
+        options.outputFileName,
+        options.clusterFolders,
         {
-            hideAttributes: program.hideAttributes,
-            hideOperators: program.hideOperators,
-            hideEnums: program.hideEnums,
-            hideStructs: program.hideStructs,
-            hideLibraries: program.hideLibraries,
-            hideInterfaces: program.hideInterfaces,
+            hideAttributes: options.hideAttributes,
+            hideOperators: options.hideOperators,
+            hideEnums: options.hideEnums,
+            hideStructs: options.hideStructs,
+            hideLibraries: options.hideLibraries,
+            hideInterfaces: options.hideInterfaces,
+            hideInternals: options.hideInternals,
         }
     ).then(() => {
         debug(`Finished`)

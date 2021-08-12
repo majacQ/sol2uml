@@ -187,7 +187,11 @@ function addAssociationToDot(
             (sourceUmlClass.stereotype === ClassStereotype.Library ||
                 targetUmlClass.stereotype === ClassStereotype.Library)) ||
         (classOptions.hideInterfaces &&
-            targetUmlClass.stereotype === ClassStereotype.Interface)
+            targetUmlClass.stereotype === ClassStereotype.Interface) ||
+        (classOptions.hideStructs &&
+            targetUmlClass.stereotype === ClassStereotype.Struct) ||
+        (classOptions.hideEnums &&
+            targetUmlClass.stereotype === ClassStereotype.Enum)
     ) {
         return ''
     }
@@ -223,6 +227,22 @@ export function convertDot2Svg(dot: string): any {
         console.log(dot)
         throw new VError(err, `Failed to parse dot string`)
     }
+}
+
+export function writeSolidity(code: string, filename = 'solidity') {
+    const outputFile = filename + '.sol'
+    debug(`About to write Solidity to file ${outputFile}`)
+
+    writeFile(outputFile, code, (err) => {
+        if (err) {
+            throw new VError(
+                err,
+                `Failed to write Solidity to file ${outputFile}`
+            )
+        } else {
+            console.log(`Solidity written to ${outputFile}`)
+        }
+    })
 }
 
 export function writeDot(dot: string, dotFilename = 'classDiagram.dot') {
