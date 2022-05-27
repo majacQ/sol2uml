@@ -20,7 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "@solidity-parser/parser": "^0.10.2",
-    "axios": "^0.21.1",
+    "axios": "^0.21.4",
     "commander": "^3.0.2",
     "debug": "^4.3.1",
     "js-graph-algorithms": "^1.0.18",
